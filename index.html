@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AuditChain — Immutable Audit Log on Stellar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0f1a;
+  --ink-2: #111827;
+  --ink-3: #1e2a3a;
+  --border: #1e3a2a;
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.08);
+  --green-glow: rgba(34,197,94,0.18);
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --muted: #4b6a5c;
+  --text: #c8d9cd;
+  --text-dim: #607870;
+  --white: #f0faf4;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--mono);
+  background: var(--ink);
+  color: var(--text);
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* ─── NOISE TEXTURE ─── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* ─── GRID BACKGROUND ─── */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34,197,94,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,197,94,0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: rgba(10,15,26,0.8);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-logo {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--green);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-logo .logo-bracket {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-weight: 400;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover { color: var(--green); }
+
+.nav-cta {
+  background: var(--green-dim);
+  border: 1px solid var(--green);
+  color: var(--green) !important;
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  transition: background 0.2s !important;
+}
+
+.nav-cta:hover { background: var(--green-glow) !important; }
+
+/* ─── HERO ─── */
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8rem 2rem 6rem;
+  text-align: center;
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(34,197,94,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--green);
+  border: 1px solid var(--border);
+  background: var(--green-dim);
+  padding: 0.35rem 0.9rem;
+  border-radius: 2px;
+  margin-bottom: 2rem;
+}
+
+.hero-kicker::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--white);
+  margin-bottom: 0.5rem;
+}
+
+.hero h1 .accent {
+  color: var(--green);
+  font-style: italic;
+  display: block;
+}
+
+.hero-sub {
+  max-width: 540px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  margin: 1.5rem auto 3rem;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-launch {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  background: var(--green);
+  color: var(--ink);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: transform 0.15s, box-shadow 0.15s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-launch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(34,197,94,0.25);
+}
+
+.btn-ghost {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: color 0.2s, border-color 0.2s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-ghost:hover { color: var(--green); border-color: var(--green); }
+
+/* ─── LIVE TERMINAL FEED ─── */
+.terminal-feed {
+  position: relative;
+  margin: 4rem auto 0;
+  max-width: 640px;
+  background: var(--ink-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--ink-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+.terminal-dot.r { background: #ef4444; }
+.terminal-dot.y { background: #f59e0b; }
+.terminal-dot.g { background: #22c55e; }
+
+.terminal-title {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  margin-left: 0.3rem;
+}
+
+.terminal-body {
+  padding: 1rem 1.2rem;
+  font-size: 0.76rem;
+  line-height: 1.9;
+  min-height: 180px;
+  color: var(--text-dim);
+}
+
+.terminal-body .log-line { display: flex; gap: 0.8rem; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+.log-ts { color: var(--muted); flex-shrink: 0; }
+.log-tag { padding: 0 0.35rem; border-radius: 2px; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.06em; }
+.log-tag.ok { background: rgba(34,197,94,0.15); color: var(--green); }
+.log-tag.warn { background: rgba(245,158,11,0.15); color: var(--amber); }
+.log-tag.err { background: rgba(239,68,68,0.15); color: var(--red); }
+.log-msg { color: var(--text); }
+.cursor { animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ─── STATS ROW ─── */
+.stats-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  max-width: 900px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stat-item {
+  flex: 1;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+
+.stat-item:last-child { border-right: none; }
+
+.stat-num {
+  font-family: var(--sans);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--green);
+  display: block;
+  letter-spacing: -0.03em;
+}
+
+.stat-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 0.25rem;
+}
+
+/* ─── SECTION BASE ─── */
+section {
+  position: relative;
+  z-index: 1;
+  padding: 6rem 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.section-kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 1rem;
+}
+
+.section-heading {
+  font-family: var(--sans);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+
+.section-sub {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  max-width: 480px;
+  line-height: 1.7;
+}
+
+/* ─── HOW IT WORKS ─── */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 3rem;
+}
+
+.step {
+  background: var(--ink-2);
+  padding: 2rem 1.5rem;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.step:hover { background: var(--ink-3); }
+
+.step-num {
+  font-family: var(--sans);
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: rgba(34,197,94,0.08);
+  line-height: 1;
+  margin-bottom: 1rem;
+  letter-spacing: -0.05em;
+}
+
+.step-title {
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 0.5rem;
+}
+
+.step-desc {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.step-code {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-size: 0.68rem;
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid rgba(34,197,94,0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+}
+
+/* ─── FEATURES GRID ─── */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 3rem;
+}
+
+.feature {
+  background: var(--ink-2);
+  padding: 2rem;
+  transition: background 0.2s;
+}
+
+.feature:hover { background: var(--ink-3); }
+
+.feature-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--green-dim);
+  border: 1px solid rgba(34,197,94,0.2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.2rem;
+  font-size: 16px;
+}
+
+.feature-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--white);
+  margin-bottom: 0.5rem;
+}
+
+.feature-desc {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+/* ─── AUDIT DEMO PANEL ─── */
+.demo-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+  align-items: start;
+}
+
+.demo-panel {
+  background: var(--ink-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.demo-panel-header {
+  padding: 0.75rem 1.2rem;
+  background: var(--ink-3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.demo-panel-title {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.demo-badge {
+  font-size: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  background: rgba(34,197,94,0.12);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,0.2);
+}
+
+.demo-panel-body {
+  padding: 1.2rem;
+}
+
+.entry-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(30,58,42,0.5);
+  font-size: 0.76rem;
+}
+
+.entry-row:last-child { border-bottom: none; }
+
+.entry-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.entry-dot.ok { background: var(--green); }
+.entry-dot.warn { background: var(--amber); }
+.entry-dot.err { background: var(--red); }
+
+.entry-info { overflow: hidden; }
+.entry-action { color: var(--white); font-size: 0.78rem; }
+.entry-actor { color: var(--text-dim); font-size: 0.68rem; margin-top: 1px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.entry-sev {
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.sev-0 { background: rgba(100,200,120,0.1); color: #4ade80; }
+.sev-1 { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.sev-2 { background: rgba(245,158,11,0.12); color: var(--amber); }
+.sev-3 { background: rgba(239,68,68,0.12); color: var(--red); }
+
+.flag-entry {
+  background: rgba(245,158,11,0.04);
+  border: 1px solid rgba(245,158,11,0.2) !important;
+  padding: 0.8rem;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.flag-icon { color: var(--amber); font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+
+.flag-id { font-size: 0.72rem; color: var(--amber); font-weight: 600; }
+.flag-reason { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+/* ─── CONTRACT INFO ─── */
+.contract-block {
+  background: var(--ink-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  margin-top: 3rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.contract-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--green), transparent);
+}
+
+.contract-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.contract-addr {
+  font-size: 0.82rem;
+  color: var(--green);
+  word-break: break-all;
+  margin-bottom: 1.5rem;
+}
+
+.method-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.method-pill {
+  background: var(--green-dim);
+  border: 1px solid rgba(34,197,94,0.15);
+  border-radius: 4px;
+  padding: 0.6rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.method-name {
+  font-size: 0.78rem;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.method-type {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ─── CTA SECTION ─── */
+.cta-section {
+  position: relative;
+  z-index: 1;
+  padding: 6rem 2rem;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+.cta-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ─── FOOTER ─── */
+footer {
+  position: relative;
+  z-index: 1;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.footer-left {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.footer-right {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.footer-right a {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-right a:hover { color: var(--green); }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 720px) {
+  nav { padding: 0.8rem 1rem; }
+  .nav-links { display: none; }
+  .demo-split { grid-template-columns: 1fr; }
+  .stat-item { padding: 1.5rem 1rem; }
+  .stat-num { font-size: 2rem; }
+  .hero h1 { font-size: 3rem; }
+  section { padding: 4rem 1.5rem; }
+}
+
+/* ─── APP LINK TARGET ─── */
+#app-link-target { scroll-margin-top: 80px; }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">
+    <span class="logo-bracket">[</span>AUDIT<span style="color:var(--white)">CHAIN</span><span class="logo-bracket">]</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#contract">Contract</a></li>
+    <li><a href="/app.html" class="nav-cta">Launch App →</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-glow"></div>
+
+  <div class="hero-kicker">
+    Live on Stellar Testnet · Soroban
+  </div>
+
+  <h1>
+    Trust, but
+    <span class="accent">Verify</span>
+  </h1>
+
+  <p class="hero-sub">
+    Immutable audit trail infrastructure built on Stellar Soroban.
+    Log actions, track access patterns, flag anomalies — all on-chain, all verifiable.
+  </p>
+
+  <div class="hero-actions">
+    <a href="/app.html" class="btn-launch">Launch Console →</a>
+    <a href="#contract" class="btn-ghost">View Contract</a>
+  </div>
+
+  <!-- Live terminal feed -->
+  <div class="terminal-feed">
+    <div class="terminal-titlebar">
+      <span class="terminal-dot r"></span>
+      <span class="terminal-dot y"></span>
+      <span class="terminal-dot g"></span>
+      <span class="terminal-title">auditchain.log — live feed</span>
+    </div>
+    <div class="terminal-body" id="terminal-body">
+      <div class="log-line">
+        <span class="log-ts">09:14:02</span>
+        <span class="log-tag ok">LOG</span>
+        <span class="log-msg">log_action :: actor=GDYN...APKL target=user_profile sev=1</span>
+      </div>
+      <div class="log-line">
+        <span class="log-ts">09:14:08</span>
+        <span class="log-tag ok">LOG</span>
+        <span class="log-msg">log_access :: resource=/api/payments type=read</span>
+      </div>
+      <div class="log-line">
+        <span class="log-ts">09:14:19</span>
+        <span class="log-tag warn">FLAG</span>
+        <span class="log-msg">flag_entry :: id=log7 reason="unusual access pattern"</span>
+      </div>
+      <div class="log-line">
+        <span class="log-ts">09:14:31</span>
+        <span class="log-tag ok">READ</span>
+        <span class="log-msg">get_entry_count :: returns 14</span>
+      </div>
+      <div class="log-line" id="live-line">
+        <span class="log-ts" id="live-ts">09:14:44</span>
+        <span class="log-tag ok" id="live-tag">LOG</span>
+        <span class="log-msg" id="live-msg">log_action :: actor=GCXY...2M9F target=config sev=2</span>
+      </div>
+      <div class="log-line">
+        <span class="log-ts"></span>
+        <span></span>
+        <span class="log-msg cursor" style="color:var(--green)">█</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div style="position:relative;z-index:1;padding:0 2rem 6rem;max-width:900px;margin:0 auto;">
+  <div class="stats-row">
+    <div class="stat-item">
+      <span class="stat-num">100%</span>
+      <div class="stat-label">On-chain verifiable</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">6</span>
+      <div class="stat-label">Contract methods</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">5</span>
+      <div class="stat-label">Severity levels</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">0</span>
+      <div class="stat-label">Trusted third parties</div>
+    </div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-kicker">// how it works</div>
+  <h2 class="section-heading">Audit trail in<br>four steps</h2>
+  <p class="section-sub">
+    Connect your Freighter wallet and start logging immutable audit events directly to the Stellar blockchain.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-title">Connect Wallet</div>
+      <div class="step-desc">Link your Freighter wallet to authenticate as an auditor. Your public key becomes your identity on the chain.</div>
+      <span class="step-code">checkConnection()</span>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-title">Log an Action</div>
+      <div class="step-desc">Record any system event with actor, action type, target, description, and severity 0–5. Timestamped forever.</div>
+      <span class="step-code">log_action()</span>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-title">Track Access</div>
+      <div class="step-desc">Create access logs tied to specific resources and access types — read, write, delete. Full API trail.</div>
+      <span class="step-code">log_access()</span>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <div class="step-title">Flag & Query</div>
+      <div class="step-desc">Mark suspicious entries with a reason. Query the full log, individual entries, or pull live count metrics.</div>
+      <span class="step-code">flag_entry()</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" style="padding-top:0;">
+  <div class="section-kicker">// core features</div>
+  <h2 class="section-heading">Why on-chain<br>audit logging?</h2>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-title">Tamper-proof records</div>
+      <div class="feature-desc">Once written to Stellar, no entry can be altered. The blockchain provides cryptographic guarantees that your audit trail is immutable and trustworthy.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Real-time flagging</div>
+      <div class="feature-desc">Flag suspicious entries instantly with a reason string. The contract enforces that an entry can only be flagged once, preventing duplicate alerts.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Queryable state</div>
+      <div class="feature-desc">Read entry counts, flagged totals, and individual records via read-only simulation — no gas cost for queries. Perfect for dashboards and monitoring.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <div class="feature-title">Auth-gated writes</div>
+      <div class="feature-desc">Every write operation requires the actor to sign the transaction. Only the actor or auditor who calls a function can be its author — spoofing is impossible.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Severity levels 0–5</div>
+      <div class="feature-desc">Classify events from informational (0–1) through warning (2) to critical (3–5). The contract validates range on-chain, so bad data never reaches storage.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🌐</div>
+      <div class="feature-title">Stellar Soroban native</div>
+      <div class="feature-desc">Built in Rust on Soroban — Stellar's smart contract platform. 5-second finality, low fees, and full testnet support out of the box.</div>
+    </div>
+  </div>
+</section>
+
+<!-- AUDIT DEMO PANEL -->
+<section id="demo" style="padding-top:0;">
+  <div class="section-kicker">// live data preview</div>
+  <h2 class="section-heading">What the audit<br>log looks like</h2>
+
+  <div class="demo-split">
+    <!-- Entry list -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <span class="demo-panel-title">Audit Entries</span>
+        <span class="demo-badge">LIVE</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="entry-row">
+          <span class="entry-dot ok"></span>
+          <div class="entry-info">
+            <div class="entry-action">update_config</div>
+            <div class="entry-actor">GDYN...APKL → /settings/security</div>
+          </div>
+          <span class="entry-sev sev-1">SEV 1</span>
+        </div>
+        <div class="entry-row">
+          <span class="entry-dot ok"></span>
+          <div class="entry-info">
+            <div class="entry-action">read_access</div>
+            <div class="entry-actor">GCXY...2M9F → /api/payments</div>
+          </div>
+          <span class="entry-sev sev-0">SEV 0</span>
+        </div>
+        <div class="entry-row">
+          <span class="entry-dot warn"></span>
+          <div class="entry-info">
+            <div class="entry-action">delete_record</div>
+            <div class="entry-actor">GBHJ...77KQ → /db/users/5519</div>
+          </div>
+          <span class="entry-sev sev-2">SEV 2</span>
+        </div>
+        <div class="entry-row">
+          <span class="entry-dot err"></span>
+          <div class="entry-info">
+            <div class="entry-action">export_bulk</div>
+            <div class="entry-actor">GFXX...R3PL → /api/export/all</div>
+          </div>
+          <span class="entry-sev sev-3">SEV 3</span>
+        </div>
+        <div class="entry-row">
+          <span class="entry-dot ok"></span>
+          <div class="entry-info">
+            <div class="entry-action">login_event</div>
+            <div class="entry-actor">GKQM...9ZWT → /auth/session</div>
+          </div>
+          <span class="entry-sev sev-0">SEV 0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flagged panel + counters -->
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <div class="demo-panel">
+        <div class="demo-panel-header">
+          <span class="demo-panel-title">Flagged Entries</span>
+          <span class="demo-badge" style="background:rgba(245,158,11,0.12);color:var(--amber);border-color:rgba(245,158,11,0.2);">2 FLAGS</span>
+        </div>
+        <div class="demo-panel-body">
+          <div class="flag-entry">
+            <span class="flag-icon">⚠</span>
+            <div class="flag-content">
+              <div class="flag-id">Entry: log_0047</div>
+              <div class="flag-reason">Bulk export at 03:17 UTC — outside business hours</div>
+            </div>
+          </div>
+          <div class="flag-entry">
+            <span class="flag-icon">⚠</span>
+            <div class="flag-content">
+              <div class="flag-id">Entry: log_0031</div>
+              <div class="flag-reason">Repeated failed auth from unknown actor</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-panel">
+        <div class="demo-panel-header">
+          <span class="demo-panel-title">Live Metrics</span>
+        </div>
+        <div class="demo-panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+          <div style="background:var(--ink-3);border-radius:4px;padding:1rem;text-align:center;">
+            <div style="font-family:var(--sans);font-size:1.8rem;font-weight:800;color:var(--green);">47</div>
+            <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:2px;">Total Entries</div>
+          </div>
+          <div style="background:var(--ink-3);border-radius:4px;padding:1rem;text-align:center;">
+            <div style="font-family:var(--sans);font-size:1.8rem;font-weight:800;color:var(--amber);">2</div>
+            <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:2px;">Flagged</div>
+          </div>
+          <div style="background:var(--ink-3);border-radius:4px;padding:1rem;text-align:center;">
+            <div style="font-family:var(--sans);font-size:1.8rem;font-weight:800;color:var(--white);">3</div>
+            <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:2px;">High Severity</div>
+          </div>
+          <div style="background:var(--ink-3);border-radius:4px;padding:1rem;text-align:center;">
+            <div style="font-family:var(--sans);font-size:1.8rem;font-weight:800;color:var(--green);">100%</div>
+            <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:2px;">On-chain</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTRACT -->
+<section id="contract" style="padding-top:0;">
+  <div class="section-kicker">// smart contract</div>
+  <h2 class="section-heading">Soroban contract<br>reference</h2>
+  <p class="section-sub">
+    Deployed on Stellar Testnet. All operations are trustless — the contract code is the source of truth.
+  </p>
+
+  <div class="contract-block">
+    <div class="contract-label">Contract ID (Testnet)</div>
+    <div class="contract-addr">CCQKTWJ3PMNNKCR2N5S4PV2KUXJOMS22637U5MH6C5OZCRL2BDNHHKY5</div>
+
+    <div class="contract-label">Available Methods</div>
+    <div class="method-list">
+      <div class="method-pill">
+        <span class="method-name">log_action</span>
+        <span class="method-type">write · auth required</span>
+      </div>
+      <div class="method-pill">
+        <span class="method-name">log_access</span>
+        <span class="method-type">write · auth required</span>
+      </div>
+      <div class="method-pill">
+        <span class="method-name">flag_entry</span>
+        <span class="method-type">write · auditor auth</span>
+      </div>
+      <div class="method-pill">
+        <span class="method-name">get_entry</span>
+        <span class="method-type">read · free simulation</span>
+      </div>
+      <div class="method-pill">
+        <span class="method-name">list_entries</span>
+        <span class="method-type">read · free simulation</span>
+      </div>
+      <div class="method-pill">
+        <span class="method-name">get_entry_count</span>
+        <span class="method-type">read · free simulation</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-section">
+  <div class="hero-kicker" style="margin-bottom:1.5rem;">
+    Ready to audit?
+  </div>
+  <h2 style="font-family:var(--sans);font-size:clamp(2rem,5vw,3.5rem);font-weight:800;color:var(--white);letter-spacing:-0.03em;margin-bottom:1rem;">
+    Start logging<br>in seconds
+  </h2>
+  <p style="color:var(--text-dim);font-size:0.85rem;max-width:400px;margin:0 auto 2.5rem;">
+    Connect your Freighter wallet and write your first audit event to the Stellar blockchain.
+  </p>
+  <a href="/app.html" class="btn-launch" style="font-size:0.9rem;padding:1rem 2.5rem;">
+    Open Security Console →
+  </a>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    AuditChain · Stellar Soroban Project 22 · Testnet
+  </div>
+  <div class="footer-right">
+    <a href="#how">Docs</a>
+    <a href="#contract">Contract</a>
+    <a href="/app.html">Console</a>
+  </div>
+</footer>
+
+<script>
+// Animated terminal log feed
+const logs = [
+  { tag: 'LOG', tagClass: 'ok', msg: 'log_action :: actor=GDYN...APKL target=user_profile sev=1' },
+  { tag: 'LOG', tagClass: 'ok', msg: 'log_access :: resource=/api/payments type=read' },
+  { tag: 'FLAG', tagClass: 'warn', msg: 'flag_entry :: id=log12 reason="off-hours bulk access"' },
+  { tag: 'READ', tagClass: 'ok', msg: 'get_entry_count :: returns 48' },
+  { tag: 'LOG', tagClass: 'ok', msg: 'log_action :: actor=GCXY...2M9F target=config sev=2' },
+  { tag: 'ERR', tagClass: 'err', msg: 'flag_entry :: AlreadyFlagged on id=log7' },
+  { tag: 'READ', tagClass: 'ok', msg: 'list_entries :: 48 ids returned' },
+  { tag: 'LOG', tagClass: 'ok', msg: 'log_access :: resource=/db/admin type=write' },
+  { tag: 'FLAG', tagClass: 'warn', msg: 'flag_entry :: id=log48 reason="privilege escalation attempt"' },
+  { tag: 'READ', tagClass: 'ok', msg: 'get_flagged_count :: returns 3' },
+];
+
+let logIdx = 4;
+function getNow() {
+  const d = new Date();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2, '0')).join(':');
+}
+
+setInterval(() => {
+  const log = logs[logIdx % logs.length];
+  logIdx++;
+  document.getElementById('live-ts').textContent = getNow();
+  const tag = document.getElementById('live-tag');
+  tag.textContent = log.tag;
+  tag.className = 'log-tag ' + log.tagClass;
+  document.getElementById('live-msg').textContent = log.msg;
+
+  const line = document.getElementById('live-line');
+  line.style.opacity = '0';
+  line.style.transform = 'translateY(4px)';
+  line.style.transition = 'none';
+  requestAnimationFrame(() => {
+    line.style.transition = 'opacity 0.3s, transform 0.3s';
+    line.style.opacity = '1';
+    line.style.transform = 'translateY(0)';
+  });
+}, 3000);
+</script>
+
+</body>
+</html>
